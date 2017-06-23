@@ -1,949 +1,533 @@
+#include"game.h"
 #include"dynamic_array.h"
 #include<iostream>
 #include<Windows.h>
 #include<time.h>
 using namespace std;
-
-bool PlayerTurn = true;
-
-class Game;
-class Player;
-class Mouse;
-class Record;
-class Menu;
-class AI;
-class Map;
-
-
-
-class Mouse
+namespace warships
 {
-public:
-	enum ACTION_MODE{ LEFT_BUTTON, RIGHT_BUTTON };
-	struct ACTION{
-		ACTION_MODE mode;
-		COORD coord;
-	};
-	ACTION action;
-	ACTION getAction()
+	Map::Map()
 	{
-		ACTION action;
-		HANDLE h_in = GetStdHandle(STD_INPUT_HANDLE);
-		SetConsoleMode(h_in, ENABLE_MOUSE_INPUT);
-
-		INPUT_RECORD all_events[256];
-		DWORD read_event;
-
-		while (true)
+		create_array(table_mode, getHeight(), getWidth());// player field
+		fill_array(table_mode, getHeight(), getWidth(), 0);
+		create_array(table_state, getHeight(), getWidth());
+		fill_array(table_state, getHeight(), getWidth(), 0);
+		setShips();
+	}
+	void Map::render(Game&game)
+	{
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleCursorPosition(handle, { 0, 0 });
+		for (unsigned int y = 0; y < getHeight(); y++)
 		{
-			ReadConsoleInput(h_in, all_events, 256, &read_event);
-			if (all_events[0].Event.MouseEvent.dwButtonState == FROM_LEFT_1ST_BUTTON_PRESSED)
+			for (unsigned int x = 0; x < getWidth(); x++)
 			{
-				action.mode = LEFT_BUTTON;
-				action.coord = all_events[0].Event.MouseEvent.dwMousePosition;
-				return action;
+				switch (table_mode[y][x])
+				{
+				case CLOSE:
+					if (table_state[y][x] == SHIP_HERE && game.getIsOver())
+					{
+						SetConsoleTextAttribute(handle, 7 * 16 + 9);
+						cout << (char)254;
+					}
+					else
+					{
+						SetConsoleTextAttribute(handle, 8);
+						cout << (char)219;
+					}
+					break;
+				case OPEN:
+					SetConsoleTextAttribute(handle, 7 * 16 + 9);
+					if (table_state[y][x] == EMPTY || table_state[y][x] == NEAR_SHIP)
+					{
+						cout << ' ';
+					}
+					else if (table_state[y][x] == MISS)
+					{
+						SetConsoleTextAttribute(handle, 3 * 16 + 9);
+						cout << '*';
+					}
+					else if (table_state[y][x] == DESTROY)
+					{
+						SetConsoleTextAttribute(handle, 8 * 16 + 12);
+						cout << (char)35;
+					}
+					else if (table_state[y][x] == EXPLODED)
+					{
+						SetConsoleTextAttribute(handle, 8 * 16 + 12);
+						cout << (char)253;
+					}
+					else
+						cout << table_state[y][x];
+					break;
+				}
+
 			}
-
-
-			else if (all_events[0].Event.MouseEvent.dwButtonState == RIGHTMOST_BUTTON_PRESSED)
+			cout << endl;
+		}
+		SetConsoleTextAttribute(handle, 8 + 0);
+	}
+	void Map::renderp()
+	{
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		for (unsigned int y = 0; y < getHeight(); y++)
+		{
+			SetConsoleCursorPosition(handle, { 12, y });
+			for (unsigned int x = 0; x < getWidth(); x++)
 			{
-				action.mode = RIGHT_BUTTON;
-				action.coord = all_events[0].Event.MouseEvent.dwMousePosition;
-				return action;
+				switch (table_mode[y][x])
+				{
+				case CLOSE:
+					if (table_state[y][x] == EMPTY || table_state[y][x] == NEAR_SHIP)
+					{
+						SetConsoleTextAttribute(handle, 8);
+						cout << (char)219;
+					}
+					else if (table_state[y][x] == SHIP_HERE)
+					{
+						SetConsoleTextAttribute(handle, 7 * 16 + 9);
+						cout << (char)254;
+					}
+					break;
+				case OPEN:
+					SetConsoleTextAttribute(handle, 7 * 16 + 9);
+					if (table_state[y][x] == EMPTY || table_state[y][x] == NEAR_SHIP)
+					{
+						cout << ' ';
+					}
+					else if (table_state[y][x] == SHIP_HERE)
+					{
+						cout << (char)254;
+					}
+					else if (table_state[y][x] == MISS)
+					{
+						SetConsoleTextAttribute(handle, 3 * 16 + 9);
+						cout << '*';
+					}
+					else if (table_state[y][x] == DESTROY)
+					{
+						SetConsoleTextAttribute(handle, 8 * 16 + 12);
+						cout << (char)35;
+					}
+					else if (table_state[y][x] == EXPLODED)
+					{
+						SetConsoleTextAttribute(handle, 8 * 16 + 12);
+						cout << (char)253;
+					}
+					else
+						cout << table_state[y][x];
+					break;
+				}
+
 			}
+			cout << endl;
 		}
-	}
-};
+		SetConsoleTextAttribute(handle, 8 + 0);
 
-class Menu : public Mouse
-{
-public:
+		SetConsoleCursorPosition(handle, { 25, 1 });
+		cout << "LEFT_BUTTON : Fire " << endl;
+		SetConsoleCursorPosition(handle, { 25, 2 });
+		cout << "RIGHT_BUTTON: Menu " << endl;
+		SetConsoleCursorPosition(handle, { 25, 3 });
+	}
+	void Map::setShips()
+	{
+		SetShipAuto(4);
 
-	void menu(Game&game, Record &record);
-	void renderm(Game&game);
+		SetShipAuto(3);
+		SetShipAuto(3);
 
-};
-class Game : public Mouse
-{
-private:
-	const unsigned int height_ = 10;
-	const unsigned int width_ = 10;
-	bool isOver;
-	bool isWin;
-	bool isGameBegin = false;
-protected:
+		SetShipAuto(2);
+		SetShipAuto(2);
+		SetShipAuto(2);
 
-public:
-	enum MODE{ CLOSE, OPEN };
-	enum STATE{ EMPTY, SHIP_HERE, NEAR_SHIP, MISS, DESTROY, EXPLODED };
-	unsigned int playerShips = 20;
-	unsigned int compShips = 20;
-	
-
-	unsigned int getPlayerShips()
-	{
-		return playerShips;
+		SetShipAuto(1);
+		SetShipAuto(1);
+		SetShipAuto(1);
+		SetShipAuto(1);
 	}
-	unsigned int getCompShips()
+	int Map::chekCoord(int y, int x)
 	{
-		return compShips;
-	}
-	bool getIsGameBegin()
-	{
-		return isGameBegin;
-	}
-	bool getIsOver()
-	{
-		return isOver;
-	}
-	void destroyPlayerShip()
-	{
-		playerShips--;
-	}
-	void destroyCompShip()
-	{
-		compShips --;
-	}
-	int getHeight()
-	{
-		int height = height_;
-		return height;
-	}
-	int getWidth()
-	{
-		int width = width_;
-		return width;
-	}
-	void update()
-	{
-		if (compShips == 0)
+		if (x >= 0 && y >= 0 && x < getWidth() && y < getHeight())
 		{
-			isWin = isOver = true;
-		}
-		else if (playerShips == 0)
-			isOver = true;
-	}
-
-	void prepareGame(Record & record);
-	void processinput(Game&game, Player player, Player enemy, Record & record, Menu&menu, Map&playerMap, Map&compMap);
-	void run(Game&game);
-};
-
-class Record : public Game
-{
-
-public:
-
-	struct RECORD{
-		char * name;
-		unsigned int pShips;
-		unsigned int cShips;
-	};
-	RECORD record;
-	void setName(char * a)
-	{
-		record.name = a;
-	}
-	void setPlayerShips(int a)
-	{
-		record.pShips = a;
-	}
-	void setCompShips(int a)
-	{
-		record.cShips = a;
-	}
-	char * getName()
-	{
-		return record.name;
-	}
-	int getPlayerShips()
-	{
-		return record.pShips;
-	}
-	int getCompShips()
-	{
-		return record.cShips;
-	}
-
-	void hallOfFame(const int x, const int y);
-
-	/*record.ships = game.playerShips;
-	FILE * f;
-	fopen_s(&f, "record.txt", "a");
-
-	char ships[4];
-	_itoa(record.ships, ships, 10);
-	char * rec = record.name;
-
-	strcat(rec, " ");
-	strcat(rec, ships);
-	strcat(rec, "\n");
-	fputs(rec, f);
-	fclose(f);*/
-
-};
-
-class Map : public Game
-{
-public:
-	int ** table_mode;
-	int ** table_state;
-
-	Map();
-
-	void render(Game&game);
-	void renderp();
-
-	void setShips();
-	int chekCoord(int y, int x);
-	void SetShipAuto(int deck_);
-};
-
-class Player : public Game
-{
-	friend class Ships;
-public:
-
-	void openCell(Game&game, Map&map, unsigned int x, unsigned int y, bool AI = false);
-	bool ChekDestroy(Map&map, const int y, const int x, const int cheky = -1, int const chekx = -1);
-	void explosion(Map&map, unsigned int y, unsigned int x);
-
-
-};
-
-// _____________Artificial Intelligence____________
-class AI : public Game
-{
-public:
-	void simpleAi(Game & game, Map&map, Player & player)
-	{
-		static int shoot_x, shoot_y;
-		static int shoot_dy = 0, shoot_dx = 0;
-		static unsigned int hit = 1;
-		while (!PlayerTurn)
-		{
-			bool compTurn = true;
-			do
+			if (table_state[y][x] == EMPTY)
 			{
-				if (hit == 1)
-				{
-					shoot_dx = 0;
-					shoot_dy = 0;
-					shoot_x = rand() % getWidth();
-					shoot_y = rand() % getHeight();
-				}
-				shoot_dy += shoot_y;
-				shoot_dx += shoot_x;
-			} while (map.table_mode[shoot_dy][shoot_dx] != CLOSE);
-			if (shoot_dx >= 0 && shoot_dy >= 0 && shoot_dx < getWidth() && shoot_dy < getHeight())
-			{
-				player.openCell(game, map, shoot_dx, shoot_dy, true);
-				map.renderp();
-			}
-			game.update();
-		}
-	}
-	void hardAi(Game & game, Map&map, Player& player)
-	{
-		static int shoot_x, shoot_y;
-		static	short side = 0;
-		static int shoot_dy = 0, shoot_dx = 0;
-		static bool apple = false;
-		static unsigned int hit = 1;
+				return 1;
 
-
-
-		while (!PlayerTurn)
-		{
-			bool compTurn = true;
-			do
-			{
-				if (hit == 1)
-				{
-					shoot_dx = 0;
-					shoot_dy = 0;
-					shoot_x = rand() % getWidth();
-					shoot_y = rand() % getHeight();
-				}
-
-				else if (apple)
-				{
-					do
-					{
-						do
-						{
-							shoot_dx = 0, shoot_dy = 0;
-							switch (side)
-							{
-							case 0: shoot_dx = 0, shoot_dy = -1; break;
-							case 1: shoot_dx = 1, shoot_dy = 0; break;
-							case 2: shoot_dx = 0, shoot_dy = 1; break;
-							case 3: shoot_dx = -1, shoot_dy = 0; break;
-							}
-							if (shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight())
-							{
-								if (map.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] == OPEN)
-									side++;
-							}
-							else
-								side++;
-						} while (!(shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight()));
-					} while (map.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] != CLOSE);
-				}
-
-				shoot_dy += shoot_y;
-				shoot_dx += shoot_x;
-
-			} while (map.table_mode[shoot_dy][shoot_dx] != CLOSE);
-			//___________________________________________________________________________
-			if (shoot_dx >= 0 && shoot_dy >= 0 && shoot_dx < getWidth() && shoot_dy < getHeight())
-			{
-				hit++;
-				player.openCell(game, map, shoot_dx, shoot_dy, compTurn);
-				map.renderp();
-				shoot_dy -= shoot_y;
-				shoot_dx -= shoot_x;
-
-				if (map.table_state[shoot_dy + shoot_y][shoot_dx + shoot_x] == DESTROY)// get vector
-				{
-					if (hit == 2)
-					{
-						apple = true;
-
-					}
-					if (shoot_dy > 0)
-					{
-						apple = false;
-						if (shoot_dy + 1 + shoot_y < getHeight())// dy = 1
-						{
-							shoot_dy++;
-						}
-						else
-						{
-							shoot_dy = -1;
-						}
-					}
-					else if (shoot_dy < 0)
-					{
-						apple = false;
-						if (shoot_dy - 1 + shoot_y >= 0)// dy = -1
-						{
-							shoot_dy--;
-						}
-						else
-						{
-							shoot_dy = 1;
-						}
-					}
-					else if (shoot_dx > 0)
-					{
-						apple = false;
-						if (shoot_dx + 1 + shoot_x < getWidth())// dx = 1
-						{
-							shoot_dx++;
-						}
-						else
-						{
-							shoot_dx = -1;
-						}
-					}
-					else if (shoot_dx < 0)
-					{
-						apple = false;
-						if (shoot_dx - 1 + shoot_x >= 0)// dx = -1
-						{
-							shoot_dx--;
-						}
-						else
-						{
-							shoot_dx = 1;
-						}
-					}
-				}
-				else if (map.table_state[shoot_dy + shoot_y][shoot_dx + shoot_x] == MISS)
-				{
-					if (shoot_dy == 0 && shoot_dx == 0)
-					{
-						hit = 1;
-					}
-					if (shoot_dy == 1 || shoot_dy == -1 || shoot_dx == 1 || shoot_dx == -1)
-					{
-						apple = true;
-						side++;
-					}
-
-					if (shoot_dy > 1)
-					{
-						shoot_dy = -1;
-					}
-					else if (shoot_dy < -1)
-					{
-						shoot_dy = 1;
-					}
-
-					if (shoot_dx > 1)
-					{
-						shoot_dx = -1;
-					}
-					else if (shoot_dx < -1)
-					{
-						shoot_dx = 1;
-					}
-				}
-				else if (map.table_state[shoot_dy + shoot_y][shoot_dx + shoot_x] == EXPLODED)
-				{
-					apple = false;
-					hit = 1;
-					side = 0;
-					shoot_dx = 0;
-					shoot_dy = 0;
-				}
 			}
 			else
-			{
-				shoot_dy -= shoot_y;
-				shoot_dx -= shoot_x;
-			}
+				return 0;
 		}
+		return 0;
 	}
-
-};
-
-
-
-Map :: Map()
-{
-	create_array(table_mode, getHeight(), getWidth());// player field
-	fill_array(table_mode, getHeight(), getWidth(), 0);
-	create_array(table_state, getHeight(), getWidth());
-	fill_array(table_state, getHeight(), getWidth(), 0);
-	setShips();
-
-}
-void Map::render(Game&game)
-{
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleCursorPosition(handle, { 0, 0 });
-	for (unsigned int y = 0; y < getHeight(); y++)
+	void Map::SetShipAuto(int deck_)
 	{
-		for (unsigned int x = 0; x < getWidth(); x++)
+		unsigned int cell_ships = 0;
+		bool mistake = true;
+		do
 		{
-			switch (table_mode[y][x])
+			int x = rand() % getWidth();
+			int y = rand() % getHeight();
+			bool horizont = rand() % 2;
+
+			if (table_state[y][x] == EMPTY)
 			{
-			case CLOSE:
-				if (table_state[y][x] == SHIP_HERE && game.getIsOver())
-				{
-					SetConsoleTextAttribute(handle, 7 * 16 + 9);
-					cout << (char)254;
-				}
-				else
-				{
-					SetConsoleTextAttribute(handle, 8);
-					cout << (char)219;
-				}
-				break;
-			case OPEN:
-				SetConsoleTextAttribute(handle, 7 * 16 + 9);
-				if (table_state[y][x] == EMPTY || table_state[y][x] == NEAR_SHIP)
-				{
-					cout << ' ';
-				}
-				else if (table_state[y][x] == MISS)
-				{
-					SetConsoleTextAttribute(handle, 3 * 16 + 9);
-					cout << '*';
-				}
-				else if (table_state[y][x] == DESTROY)
-				{
-					SetConsoleTextAttribute(handle, 8 * 16 + 12);
-					cout << (char)35;
-				}
-				else if (table_state[y][x] == EXPLODED)
-				{
-					SetConsoleTextAttribute(handle, 8 * 16 + 12);
-					cout << (char)253;
-				}
-				else
-					cout << table_state[y][x];
-				break;
-			}
-
-		}
-		cout << endl;
-	}
-	SetConsoleTextAttribute(handle, 8 + 0);
-}
-void Map::renderp()
-{
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	for (unsigned int y = 0; y < getHeight(); y++)
-	{
-		SetConsoleCursorPosition(handle, { 12, y });
-		for (unsigned int x = 0; x < getWidth(); x++)
-		{
-			switch (table_mode[y][x])
-			{
-			case CLOSE:
-				if (table_state[y][x] == EMPTY || table_state[y][x] == NEAR_SHIP)
-				{
-					SetConsoleTextAttribute(handle, 8);
-					cout << (char)219;
-				}
-				else if (table_state[y][x] == SHIP_HERE)
-				{
-					SetConsoleTextAttribute(handle, 7 * 16 + 9);
-					cout << (char)254;
-				}
-				break;
-			case OPEN:
-				SetConsoleTextAttribute(handle, 7 * 16 + 9);
-				if (table_state[y][x] == EMPTY || table_state[y][x] == NEAR_SHIP)
-				{
-					cout << ' ';
-				}
-				else if (table_state[y][x] == SHIP_HERE)
-				{
-					cout << (char)254;
-				}
-				else if (table_state[y][x] == MISS)
-				{
-					SetConsoleTextAttribute(handle, 3 * 16 + 9);
-					cout << '*';
-				}
-				else if (table_state[y][x] == DESTROY)
-				{
-					SetConsoleTextAttribute(handle, 8 * 16 + 12);
-					cout << (char)35;
-				}
-				else if (table_state[y][x] == EXPLODED)
-				{
-					SetConsoleTextAttribute(handle, 8 * 16 + 12);
-					cout << (char)253;
-				}
-				else
-					cout << table_state[y][x];
-				break;
-			}
-
-		}
-		cout << endl;
-	}
-	SetConsoleTextAttribute(handle, 8 + 0);
-
-	SetConsoleCursorPosition(handle, { 25, 1 });
-	cout << "LEFT_BUTTON : Fire " << endl;
-	SetConsoleCursorPosition(handle, { 25, 2 });
-	cout << "RIGHT_BUTTON: Menu " << endl;
-	SetConsoleCursorPosition(handle, { 25, 3 });
-}
-void Map::setShips()
-{
-	SetShipAuto(4);
-
-	SetShipAuto(3);
-	SetShipAuto(3);
-
-	SetShipAuto(2);
-	SetShipAuto(2);
-	SetShipAuto(2);
-
-	SetShipAuto(1);
-	SetShipAuto(1);
-	SetShipAuto(1);
-	SetShipAuto(1);
-}
-int Map::chekCoord(int y, int x)
-{
-	if (x >= 0 && y >= 0 && x < getWidth() && y < getHeight())
-	{
-		if (table_state[y][x] == EMPTY)
-		{
-			return 1;
-
-		}
-		else
-			return 0;
-	}
-	return 0;
-}
-void Map::SetShipAuto(int deck_)
-{
-	unsigned int cell_ships = 0;
-	bool mistake = true;
-	do
-	{
-		int x = rand() % getWidth();
-		int y = rand() % getHeight();
-		bool horizont = rand() % 2;
-
-		if (table_state[y][x] == EMPTY)
-		{
-			short empcl = 0;
-			for (int i = 0; i < deck_; i++)
-			{
-				if (horizont)
-				{
-					empcl += chekCoord(y, x + i);
-				}
-				else
-				{
-					empcl += chekCoord(y + i, x);
-				}
-			}
-
-			if (empcl == deck_ && horizont)
-			{
+				short empcl = 0;
 				for (int i = 0; i < deck_; i++)
 				{
-					table_state[y][x + i] = SHIP_HERE;
-					++cell_ships;
-				}
-			}
-			else if (empcl == deck_ && !horizont)
-			{
-				for (int i = 0; i < deck_; i++)
-				{
-					table_state[y + i][x] = SHIP_HERE;
-					++cell_ships;
-				}
-			}
-		}
-	} while (cell_ships < deck_ && mistake);
-	//_______________________________________________________ chek
-	for (int y = 0; y < getHeight(); y++)
-		for (int x = 0; x < getWidth(); x++)
-		{
-			if (table_state[y][x] == SHIP_HERE)//_____________If there ship...
-				for (int i = 0; i < 8; i++)
-				{
-					int dx, dy;//_______________Chek cells near
-					switch (i)
+					if (horizont)
 					{
-					case 0: dx = 0, dy = -1; break;
-					case 1: dx = 1, dy = -1; break;
-					case 2: dx = 1, dy = 0; break;
-					case 3: dx = 1, dy = 1; break;
-					case 4: dx = 0, dy = 1; break;
-					case 5: dx = -1, dy = 1; break;
-					case 6: dx = -1, dy = 0; break;
-					case 7: dx = -1, dy = -1; break;
+						empcl += chekCoord(y, x + i);
 					}
-					dx += x;
-					dy += y;
-					if (dx >= 0 && dy >= 0 && dx < getWidth() && dy < getHeight())// ____ WIthin the game field
-						if (table_state[dy][dx] == EMPTY)
-						{
-							table_state[dy][dx] = NEAR_SHIP;
-						}
+					else
+					{
+						empcl += chekCoord(y + i, x);
+					}
 				}
-		}
-};
 
-void Player::openCell(Game&game, Map&map, unsigned int x, unsigned int y, bool AI)
-{
-	switch (map.table_mode[y][x])
-	{
-	case OPEN:
-		break;
-	case CLOSE:
-		map.table_mode[y][x] = OPEN;
-		if (map.table_state[y][x] == SHIP_HERE)
-		{
-			map.table_state[y][x] = DESTROY;
-			if (AI)
-				game.destroyPlayerShip();
-			else
-				game.destroyCompShip();
-
-
-
-			if (ChekDestroy(map, y, x))// need explosion?
-			{
-				map.table_state[y][x] = EXPLODED; // explosion
-				explosion(map, y, x);				  // Explosion of neighboring cells
+				if (empcl == deck_ && horizont)
+				{
+					for (int i = 0; i < deck_; i++)
+					{
+						table_state[y][x + i] = SHIP_HERE;
+						++cell_ships;
+					}
+				}
+				else if (empcl == deck_ && !horizont)
+				{
+					for (int i = 0; i < deck_; i++)
+					{
+						table_state[y + i][x] = SHIP_HERE;
+						++cell_ships;
+					}
+				}
 			}
-			Sleep(10);										//pause on explosion;
-			update();
+		} while (cell_ships < deck_ && mistake);
+		//_______________________________________________________ chek
+		for (int y = 0; y < getHeight(); y++)
+			for (int x = 0; x < getWidth(); x++)
+			{
+				if (table_state[y][x] == SHIP_HERE)//_____________If there ship...
+					for (int i = 0; i < 8; i++)
+					{
+						int dx, dy;//_______________Chek cells near
+						switch (i)
+						{
+						case 0: dx = 0, dy = -1; break;
+						case 1: dx = 1, dy = -1; break;
+						case 2: dx = 1, dy = 0; break;
+						case 3: dx = 1, dy = 1; break;
+						case 4: dx = 0, dy = 1; break;
+						case 5: dx = -1, dy = 1; break;
+						case 6: dx = -1, dy = 0; break;
+						case 7: dx = -1, dy = -1; break;
+						}
+						dx += x;
+						dy += y;
+						if (dx >= 0 && dy >= 0 && dx < getWidth() && dy < getHeight())// ____ WIthin the game field
+							if (table_state[dy][dx] == EMPTY)
+							{
+								table_state[dy][dx] = NEAR_SHIP;
+							}
+					}
+			}
+	};
 
-		}
-		else if (map.table_state[y][x] == EMPTY || map.table_state[y][x] == NEAR_SHIP)
+	void Player::openCell(Game&game, Map&map, unsigned int x, unsigned int y, bool AI)
+	{
+		switch (map.table_mode[y][x])
 		{
-			map.table_state[y][x] = MISS;
-			if (AI)
-				PlayerTurn = true;
-			else
-				PlayerTurn = false;
+		case OPEN:
+			break;
+		case CLOSE:
+			map.table_mode[y][x] = OPEN;
+			if (map.table_state[y][x] == SHIP_HERE)
+			{
+				map.table_state[y][x] = DESTROY;
+				if (AI)
+					game.destroyPlayerShip();
+				else
+					game.destroyCompShip();
 
+
+
+				if (ChekDestroy(map, y, x))// need explosion?
+				{
+					map.table_state[y][x] = EXPLODED; // explosion
+					explosion(map, y, x);				  // Explosion of neighboring cells
+				}
+				Sleep(10);										//pause on explosion;
+				update();
+
+			}
+			else if (map.table_state[y][x] == EMPTY || map.table_state[y][x] == NEAR_SHIP)
+			{
+				map.table_state[y][x] = MISS;
+				if (AI)
+					PlayerTurn = true;
+				else
+					PlayerTurn = false;
+
+				break;
+			}
 			break;
 		}
-		break;
 	}
-}
-bool Player::ChekDestroy(Map&map, const int y, const int x, const int cheky, int const chekx)
-{
-	for (int i = 0; i < 4; i++)
+	bool Player::ChekDestroy(Map&map, const int y, const int x, const int cheky, int const chekx)
 	{
-		int dy, dx;
-		switch (i)
+		for (int i = 0; i < 4; i++)
 		{
-		case 0: dx = 0, dy = -1; break;
-		case 1: dx = 1, dy = 0; break;
-		case 2: dx = 0, dy = 1; break;
-		case 3: dx = -1, dy = 0; break;
-		}
-		dy += y;
-		dx += x;
-		if (dx >= 0 && dy >= 0 && dx < getWidth() && dy < getHeight())
-		{
-			if (map.table_state[dy][dx] == NEAR_SHIP || map.table_state[dy][dx] == MISS)
-				continue;
-			else if (map.table_state[dy][dx] == SHIP_HERE)
+			int dy, dx;
+			switch (i)
 			{
-				return false;
-				break;
+			case 0: dx = 0, dy = -1; break;
+			case 1: dx = 1, dy = 0; break;
+			case 2: dx = 0, dy = 1; break;
+			case 3: dx = -1, dy = 0; break;
 			}
-			else if (map.table_state[dy][dx] == DESTROY)
+			dy += y;
+			dx += x;
+			if (dx >= 0 && dy >= 0 && dx < getWidth() && dy < getHeight())
 			{
-				if (dy == cheky && dx == chekx)
+				if (map.table_state[dy][dx] == NEAR_SHIP || map.table_state[dy][dx] == MISS)
 					continue;
-				else
+				else if (map.table_state[dy][dx] == SHIP_HERE)
 				{
-					if (ChekDestroy(map, dy, dx, y, x))
+					return false;
+					break;
+				}
+				else if (map.table_state[dy][dx] == DESTROY)
+				{
+					if (dy == cheky && dx == chekx)
 						continue;
 					else
-						return false;
+					{
+						if (ChekDestroy(map, dy, dx, y, x))
+							continue;
+						else
+							return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+	void Player::explosion(Map&map, unsigned int y, unsigned int x)
+	{
+		for (int i = 0; i < 8; i++)
+		{
+			int dx, dy;
+			switch (i)
+			{
+			case 0: dx = 0, dy = -1; break;
+			case 1: dx = 1, dy = -1; break;
+			case 2: dx = 1, dy = 0; break;
+			case 3: dx = 1, dy = 1; break;
+			case 4: dx = 0, dy = 1; break;
+			case 5: dx = -1, dy = 1; break;
+			case 6: dx = -1, dy = 0; break;
+			case 7: dx = -1, dy = -1; break;
+			}
+			dx += x;
+			dy += y;
+			if (dx >= 0 && dy >= 0 && dx < getWidth() && dy < getHeight())
+			{
+				if (map.table_state[dy][dx] == DESTROY)
+				{
+					map.table_state[dy][dx] = EXPLODED;
+					explosion(map, dy, dx);
+				}
+				else if (map.table_state[dy][dx] == NEAR_SHIP)
+				{
+					map.table_mode[dy][dx] = OPEN;
+					map.table_state[dy][dx] = MISS;
+				}
+				else if (map.table_state[dy][dx] == EXPLODED || map.table_state[dy][dx] == MISS)
+				{
+					continue;
 				}
 			}
 		}
 	}
-	return true;
-}
-void Player::explosion(Map&map, unsigned int y, unsigned int x)
-{
-	for (int i = 0; i < 8; i++)
-	{
-		int dx, dy;
-		switch (i)
-		{
-		case 0: dx = 0, dy = -1; break;
-		case 1: dx = 1, dy = -1; break;
-		case 2: dx = 1, dy = 0; break;
-		case 3: dx = 1, dy = 1; break;
-		case 4: dx = 0, dy = 1; break;
-		case 5: dx = -1, dy = 1; break;
-		case 6: dx = -1, dy = 0; break;
-		case 7: dx = -1, dy = -1; break;
-		}
-		dx += x;
-		dy += y;
-		if (dx >= 0 && dy >= 0 && dx < getWidth() && dy < getHeight())
-		{
-			if (map.table_state[dy][dx] == DESTROY)
-			{
-				map.table_state[dy][dx] = EXPLODED;
-				explosion(map, dy, dx);
-			}
-			else if (map.table_state[dy][dx] == NEAR_SHIP)
-			{
-				map.table_mode[dy][dx] = OPEN;
-				map.table_state[dy][dx] = MISS;
-			}
-			else if (map.table_state[dy][dx] == EXPLODED || map.table_state[dy][dx] == MISS)
-			{
-				continue;
-			}
-		}
-	}
-}
 
-void Record::hallOfFame(const int x, const int y)
-{
-
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleCursorPosition(handle, { x, y });
-	if (record.name)
-		cout << "Login : " << record.name << " - ships : " << record.pShips << "    Enemy ships : " << record.cShips << endl;
-	/*FILE * f;
-	fopen_s(&f, "record.txt", "r");
-	if (!f)
+	void Record::hallOfFame(const int x, const int y)
 	{
-	cout << "Wrong filename!\n";
-	return;
+
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleCursorPosition(handle, { x, y });
+		if (record.name)
+			cout << "Login : " << record.name << " - ships : " << record.pShips << "    Enemy ships : " << record.cShips << endl;
+		/*FILE * f;
+		fopen_s(&f, "record.txt", "r");
+		if (!f)
+		{
+		cout << "Wrong filename!\n";
+		return;
+		}
+
+		while (!feof(f))
+		putchar(fgetc(f));
+
+		fclose(f);*/
+
 	}
 
-	while (!feof(f))
-	putchar(fgetc(f));
+	void Menu::menu(Game&game, Record &record)
+	{
+		renderm(game);
+		bool menu = true;
+		do
+		{
+			action = getAction();
+			switch (action.mode)
+			{
+			case Game::LEFT_BUTTON:
+				if (action.coord.X >= 0 && action.coord.X < 10 && action.coord.Y >= 0 && action.coord.Y < 3)
+				{
+					menu = false;
+				}
+				if (action.coord.X >= 11 && action.coord.X < 20 && action.coord.Y >= 0 && action.coord.Y < 3 && game.getIsGameBegin())
+				{
+					record.setPlayerShips(game.getPlayerShips());
+					record.setCompShips(game.getCompShips());
+					record.hallOfFame(0, 5);
+				}
+				break;
+			case Game::RIGHT_BUTTON:
+				break;
+			}
+		} while (menu);
+	}
+	void Menu::renderm(Game&game)
+	{
+		system("cls");
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(handle, 7 * 16 + 9);
+		for (int y = 0; y < 3; y++)										// (0,0) - (10,3)
+		{
+			for (int x = 0; x < 10; x++)
+			{
+				SetConsoleCursorPosition(handle, { x, y });
+				if (y == 1 && x == 3)
+					cout << "PLAY";
+				else if (!(y == 1 && x >= 3 && x < 7))
+					cout << ' ';
+			}
+		}
 
-	fclose(f);*/
+		if (game.getIsGameBegin())
+		{
+			SetConsoleTextAttribute(handle, 7 * 16 + 9);
+			for (int y = 0; y < 3; y++)										// (11,0) - (20,3)
+			{
+				for (int x = 11; x < 22; x++)
+				{
+					SetConsoleCursorPosition(handle, { x, y });
+					if (y == 1 && x == 12)
+						cout << "STATISTIC";
+					else if (!(y == 1 && x >= 12 && x < 21))
+						cout << ' ';
+				}
+			}
+		}
 
-}
+		SetConsoleTextAttribute(handle, 7 + 0);
+	}
 
-void Menu::menu(Game&game, Record &record)
-{
-	renderm(game);
-	bool menu = true;
-	do
+	void Game::processinput(Game&game, Player player, Player enemy, Record & record, Menu&menu, Map&playerMap, Map&compMap)
 	{
 		action = getAction();
 		switch (action.mode)
 		{
-		case Game::LEFT_BUTTON:
-			if (action.coord.X >= 0 && action.coord.X < 10 && action.coord.Y >= 0 && action.coord.Y < 3)
-			{
-				menu = false;
-			}
-			if (action.coord.X >= 11 && action.coord.X < 20 && action.coord.Y >= 0 && action.coord.Y < 3 && game.getIsGameBegin())
-			{
-				record.setPlayerShips(game.getPlayerShips());
-				record.setCompShips(game.getCompShips());
-				record.hallOfFame(0, 5);
-			}
+		case LEFT_BUTTON:
+			if (action.coord.X >= 0 && action.coord.X < game.getWidth() &&
+				action.coord.Y >= 0 && action.coord.Y < game.getHeight())
+				enemy.openCell(game, compMap, action.coord.X, action.coord.Y); // Fasle - it's not computer turn
 			break;
-		case Game::RIGHT_BUTTON:
+		case RIGHT_BUTTON:// records
+			menu.menu(game, record);
+			system("cls");
+			compMap.render(game);
+			playerMap.renderp();
 			break;
 		}
-	} while (menu);
-}
-void Menu::renderm(Game&game)
-{
-	system("cls");
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, 7 * 16 + 9);
-	for (int y = 0; y < 3; y++)										// (0,0) - (10,3)
-	{
-		for (int x = 0; x < 10; x++)
-		{
-			SetConsoleCursorPosition(handle, { x, y });
-			if (y == 1 && x == 3)
-				cout << "PLAY";
-			else if (!(y == 1 && x >= 3 && x < 7))
-				cout << ' ';
-		}
 	}
-
-	if (game.getIsGameBegin())
+	void Game::prepareGame(Record & record)
 	{
-		SetConsoleTextAttribute(handle, 7 * 16 + 9);
-		for (int y = 0; y < 3; y++)										// (11,0) - (20,3)
-		{
-			for (int x = 11; x < 22; x++)
-			{
-				SetConsoleCursorPosition(handle, { x, y });
-				if (y == 1 && x == 12)
-					cout << "STATISTIC";
-				else if (!(y == 1 && x >= 12 && x < 21))
-					cout << ' ';
-			}
-		}
-	}
-
-	SetConsoleTextAttribute(handle, 7 + 0);
-}
-
-void Game::processinput(Game&game, Player player, Player enemy, Record & record, Menu&menu, Map&playerMap ,Map&compMap)
-{
-	action = getAction();
-	switch (action.mode)
-	{
-	case LEFT_BUTTON:
-		if (action.coord.X >= 0 && action.coord.X < game.getWidth() &&
-			action.coord.Y >= 0 && action.coord.Y < game.getHeight())
-			enemy.openCell(game,compMap,action.coord.X, action.coord.Y); // Fasle - it's not computer turn
-		break;
-	case RIGHT_BUTTON:// records
-		menu.menu(game,record);
 		system("cls");
-		compMap.render(game);
-		playerMap.renderp();
-		break;
-	}
-}
-void Game::prepareGame(Record & record)
-{
-	system("cls");
-	system("mode con cols=100 lines=75");
+		system("mode con cols=100 lines=75");
 
-	isOver = false;
-	char * name = new char[51];
+		isOver = false;
+		char * name = new char[51];
 
-	cout << "HEY!!! Welcome to the World of Warships \nEnter ur name pls : ";
-	cin.getline(name, 50);
+		cout << "HEY!!! Welcome to the World of Warships \nEnter ur name pls : ";
+		cin.getline(name, 50);
 
-	record.setName(name);
+		record.setName(name);
 
-	/*cout << "If u want set ships write : 0 \nIf u want set ships auto write : 1 \n";
-	bool auto_set = true;
-	cin >> auto_set;
-	cout << "If u want set mode EDITOR : 1 \nElse : 0 \n";
-	cin >> editor;*/
+		/*cout << "If u want set ships write : 0 \nIf u want set ships auto write : 1 \n";
+		bool auto_set = true;
+		cin >> auto_set;
+		cout << "If u want set mode EDITOR : 1 \nElse : 0 \n";
+		cin >> editor;*/
 
-	isWin = false;
-	isGameBegin = true;
+		isWin = false;
+		isGameBegin = true;
 
-	system("cls");
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleCursorPosition(handle, { 25, 0 });
-	SetConsoleTextAttribute(handle, 13);
-	cout << "Your Login :  " << record.getName() << endl;
-	SetConsoleTextAttribute(handle, 8 + 0);
-}
-
-void Game::run(Game&game)
-{
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	srand(time(0));
-	Menu menu;
-	Record record;
-	menu.menu(game,record);
-	prepareGame(record);
-	Map playerMap;
-	Map compMap;
-	Player player;
-	Player comp;
-	Mouse mouse;
-	AI computer;
-	compMap.render(game);
-	playerMap.renderp();
-	while (!isOver)
-	{
-		processinput(game, player, comp, record, menu,playerMap,compMap);
-		update();
-		compMap.render(game);
-		playerMap.renderp();
-		computer.hardAi(game, playerMap, player);
-		update();
-		compMap.render(game);
-		playerMap.renderp();
-		
+		system("cls");
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleCursorPosition(handle, { 25, 0 });
 		SetConsoleTextAttribute(handle, 13);
-		SetConsoleCursorPosition(handle, { 22, 11 });
-		cout << compShips;
+		cout << "Your Login :  " << record.getName() << endl;
+		SetConsoleTextAttribute(handle, 8 + 0);
 	}
-	compMap.render(game);
-	if (isWin)
+
+	void Game::run(Game&game)
 	{
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		srand(time(0));
+		Menu menu;
+		Record record;
+		menu.menu(game, record);
+		prepareGame(record);
+		Map playerMap;
+		Map compMap;
+		Player player;
+		Player comp;
+		Mouse mouse;
+		AI computer;
+		compMap.render(game);
+		playerMap.renderp();
+		while (!isOver)
+		{
+			processinput(game, player, comp, record, menu, playerMap, compMap);
+			update();
+			compMap.render(game);
+			playerMap.renderp();
+			computer.hardAi(game, playerMap, player);
+			update();
+			compMap.render(game);
+			playerMap.renderp();
 
-		SetConsoleTextAttribute(handle, 13);
-		SetConsoleCursorPosition(handle, { 22, 11 });
-		cout << "WIN!!\n";
+			SetConsoleTextAttribute(handle, 13);
+			SetConsoleCursorPosition(handle, { 22, 11 });
+			cout << compShips;
+		}
+		compMap.render(game);
+		if (isWin)
+		{
 
+			SetConsoleTextAttribute(handle, 13);
+			SetConsoleCursorPosition(handle, { 22, 11 });
+			cout << "WIN!!\n";
+
+		}
+		else
+		{
+			SetConsoleTextAttribute(handle, 14);
+			SetConsoleCursorPosition(handle, { 22, 11 });
+			cout << "DEFEAT!!\n";
+		}
 	}
-	else
-	{
-		SetConsoleTextAttribute(handle, 14);
-		SetConsoleCursorPosition(handle, { 22, 11 });
-		cout << "DEFEAT!!\n";
-	}
-}
-
-
-
-void main()
-{
-	Game game;
-	game.run(game);
-	system("pause");
-
-
 
 }
