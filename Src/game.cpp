@@ -11,6 +11,8 @@ class Player;
 class Mouse;
 class Record;
 class Menu;
+class AI;
+
 
 
 
@@ -22,8 +24,17 @@ public:
 		ACTION_MODE mode;
 		COORD coord;
 	};
+
 	ACTION action;
 public:
+
+	/*int y, x;
+	void setCoord (int s_y, int s_x)
+	{
+		y = s_y;
+		x = s_x;
+	}*/
+
 	ACTION getAction()
 	{
 		ACTION action;
@@ -52,7 +63,6 @@ public:
 			}
 		}
 	}
-	void processinput(Game&game, Player player, Player enemy, Record & record, Menu&menu);
 };
 
 class Menu : public Mouse
@@ -126,7 +136,7 @@ public:
 		else if (playerShips == 0)
 			isOver = true;
 	}
-
+	void processinput(Game&game, Player player, Player enemy, Record & record, Menu&menu);
 
 	
 	void run(Game&game);
@@ -169,15 +179,29 @@ public:
 	}
 
 	void hallOfFame(const int x, const int y);
+
+	/*record.ships = game.playerShips;
+	FILE * f;
+	fopen_s(&f, "record.txt", "a");
+
+	char ships[4];
+	_itoa(record.ships, ships, 10);
+	char * rec = record.name;
+
+	strcat(rec, " ");
+	strcat(rec, ships);
+	strcat(rec, "\n");
+	fputs(rec, f);
+	fclose(f);*/
+
 };
 
 class Player : public Game
 {
 	friend class Ships;
-protected:
+public:
 	int ** table_mode;
 	int ** table_state;
-public:
 	Player();
 	
 	void render(Game&game)
@@ -518,16 +542,19 @@ public:
 	}
 
 
-	void AI(Game & game, Player & player)
+};
+
+// _____________Artificial Intelligence____________
+class AI : public Game
+{
+public:
+
+	void simpleAi(Game & game, Player & player)
 	{
 		static int shoot_x, shoot_y;
-		static	short side = 0;
 		static int shoot_dy = 0, shoot_dx = 0;
-		static bool apple = false;
 		static unsigned int hit = 1;
-
-		//Simple AI
-		/*while (!PlayerTurn)
+		while (!PlayerTurn)
 		{
 			bool compTurn = true;
 			do
@@ -544,11 +571,21 @@ public:
 			} while (player.table_mode[shoot_dy][shoot_dx] != CLOSE);
 			if (shoot_dx >= 0 && shoot_dy >= 0 && shoot_dx < getWidth() && shoot_dy < getHeight())
 			{
-				player.openCell(game, shoot_dx, shoot_dy,true);
+				player.openCell(game, shoot_dx, shoot_dy, true);
 				player.renderp();
 			}
 			game.update();
-		}*/
+		}
+	}
+	void hardAi(Game & game, Player & player)
+	{
+		static int shoot_x, shoot_y;
+		static	short side = 0;
+		static int shoot_dy = 0, shoot_dx = 0;
+		static bool apple = false;
+		static unsigned int hit = 1;
+
+
 
 		while (!PlayerTurn)
 		{
@@ -567,22 +604,25 @@ public:
 				{
 					do
 					{
-						shoot_dx = 0, shoot_dy = 0;
-						switch (side)
+						do
 						{
-						case 0: shoot_dx = 0, shoot_dy = -1; break;
-						case 1: shoot_dx = 1, shoot_dy = 0; break;
-						case 2: shoot_dx = 0, shoot_dy = 1; break;
-						case 3: shoot_dx = -1, shoot_dy = 0; break;
-						}
-						if (shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight())
-						{
-							if (player.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] == OPEN)
+							shoot_dx = 0, shoot_dy = 0;
+							switch (side)
+							{
+							case 0: shoot_dx = 0, shoot_dy = -1; break;
+							case 1: shoot_dx = 1, shoot_dy = 0; break;
+							case 2: shoot_dx = 0, shoot_dy = 1; break;
+							case 3: shoot_dx = -1, shoot_dy = 0; break;
+							}
+							if (shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight())
+							{
+								if (player.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] == OPEN)
+									side++;
+							}
+							else
 								side++;
-						}
-						else
-							side++;
-					} while (!(shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight()) && (player.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] != CLOSE));
+						} while (!(shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight()));
+					} while (player.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] != CLOSE);
 				}
 
 				shoot_dy += shoot_y;
@@ -696,9 +736,8 @@ public:
 			}
 		}
 	}
-	// _____________Artificial Intelligence____________
-};
 
+};
 
 Player :: Player()
 {
@@ -710,8 +749,31 @@ Player :: Player()
 
 }
 
+void Record::hallOfFame(const int x, const int y)
+{
+
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	SetConsoleCursorPosition(handle, { x, y });
+	if (record.name)
+		cout << "Login : " << record.name << " - ships : " << record.pShips << "    Enemy ships : " << record.cShips << endl;
+	/*FILE * f;
+	fopen_s(&f, "record.txt", "r");
+	if (!f)
+	{
+	cout << "Wrong filename!\n";
+	return;
+	}
+
+	while (!feof(f))
+	putchar(fgetc(f));
+
+	fclose(f);*/
+
+}
+
 void Menu::menu(Game&game, Record &record)
 {
+	renderm(game);
 	bool menu = true;
 	do
 	{
@@ -721,7 +783,6 @@ void Menu::menu(Game&game, Record &record)
 		case Game::LEFT_BUTTON:
 			if (action.coord.X >= 0 && action.coord.X < 10 && action.coord.Y >= 0 && action.coord.Y < 3)
 			{
-
 				menu = false;
 			}
 			if (action.coord.X >= 11 && action.coord.X < 20 && action.coord.Y >= 0 && action.coord.Y < 3 && game.getIsGameBegin())
@@ -735,10 +796,6 @@ void Menu::menu(Game&game, Record &record)
 			break;
 		}
 	} while (menu);
-
-
-
-
 }
 void Menu::renderm(Game&game)
 {
@@ -776,7 +833,7 @@ void Menu::renderm(Game&game)
 	SetConsoleTextAttribute(handle, 7 + 0);
 }
 
-void Mouse::processinput(Game&game,Player player, Player enemy, Record & record,Menu&menu)
+void Game::processinput(Game&game,Player player, Player enemy, Record & record,Menu&menu)
 {
 	action = getAction();
 	switch (action.mode)
@@ -787,7 +844,6 @@ void Mouse::processinput(Game&game,Player player, Player enemy, Record & record,
 			enemy.openCell(game,action.coord.X, action.coord.Y); // Fasle - it's not computer turn
 		break;
 	case RIGHT_BUTTON:// records
-		menu.renderm(game);
 		menu.menu(game,record);
 		system("cls");
 		enemy.render(game);
@@ -795,7 +851,6 @@ void Mouse::processinput(Game&game,Player player, Player enemy, Record & record,
 		break;
 	}
 }
-
 void Game::prepareGame(Record & record)
 {
 	system("cls");
@@ -825,51 +880,28 @@ void Game::prepareGame(Record & record)
 	cout << "Your Login :  " << record.getName() << endl;
 	SetConsoleTextAttribute(handle, 8 + 0);
 }
-void Record :: hallOfFame(const int x,const int y)
-{
-
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleCursorPosition(handle, { x, y });
-	if (record.name)
-		cout << "Login : " << record.name << " - ships : " << record.pShips << "    Enemy ships : " << record.cShips << endl;
-	/*FILE * f;
-	fopen_s(&f, "record.txt", "r");
-	if (!f)
-	{
-	cout << "Wrong filename!\n";
-	return;
-	}
-
-	while (!feof(f))
-	putchar(fgetc(f));
-
-	fclose(f);*/
-
-}
-
-
 
 void Game::run(Game&game)
 {
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	srand(time(0));
 	Menu menu;
-	menu.renderm(game);
 	Record record;
 	menu.menu(game,record);
 	prepareGame(record);
 	Player player;
 	Player enemy;
 	Mouse mouse;
+	AI computer;
 	enemy.render(game);
 	player.renderp();
 	while (!isOver)
 	{
-		mouse.processinput(game, player, enemy, record, menu);
+		processinput(game, player, enemy, record, menu);
 		update();
 		enemy.render(game);
 		player.renderp();
-		enemy.AI(game,player);
+		computer.hardAi(game,player);
 		update();
 		enemy.render(game);
 		player.renderp();
@@ -881,19 +913,6 @@ void Game::run(Game&game)
 	enemy.render(game);
 	if (isWin)
 	{
-		/*record.ships = game.playerShips;
-		FILE * f;
-		fopen_s(&f, "record.txt", "a");
-
-		char ships[4];
-		_itoa(record.ships, ships, 10);
-		char * rec = record.name;
-
-		strcat(rec, " ");
-		strcat(rec, ships);
-		strcat(rec, "\n");
-		fputs(rec, f);
-		fclose(f);*/
 
 		SetConsoleTextAttribute(handle, 13);
 		SetConsoleCursorPosition(handle, { 22, 11 });
@@ -913,7 +932,6 @@ void Game::run(Game&game)
 
 void main()
 {
-
 	Game game;
 	game.run(game);
 	system("pause");
