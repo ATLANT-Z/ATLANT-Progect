@@ -9,6 +9,7 @@ bool PlayerTurn = true;
 class Game;
 class Player;
 class Mouse;
+class Record;
 
 class Mouse
 {
@@ -48,14 +49,15 @@ public:
 			}
 		}
 	}
-	void processinput(Game&game, Player player, Player enemy);
+	void processinput(Game&game, Player player, Player enemy, Record & record);
 };
+
 
 class Game : public Mouse
 {
 private:
-	unsigned int height_ = 10;
-	unsigned int width_ = 10;
+	const unsigned int height_ = 10;
+	const unsigned int width_ = 10;
 	bool isOver;
 	bool isWin;
 	bool isGameBegin = false;
@@ -68,11 +70,7 @@ public:
 	unsigned int compShips = 20;
 	
 
-	struct RECORD{
-		char * name;
-		unsigned int ships;
-	};
-	RECORD record;
+
 
 	bool isGameOver()
 	{
@@ -97,35 +95,7 @@ public:
 		return width;
 	}
 	
-	void prepareGame()
-	{
-		system("cls");
-		system("mode con cols=100 lines=75");
-
-		isOver = false;
-		/*compShips = 4 + 3 * 2 + 2 * 3 + 1 * 4;*/
-
-		record.name = new char[51];
-		cout << "HEY!!! Welcome to the World of Warships \nEnter ur name pls : ";
-		cin.getline(record.name, 50);
-
-		/*cout << "If u want set ships write : 0 \nIf u want set ships auto write : 1 \n";
-		bool auto_set = true;
-		cin >> auto_set;
-		cout << "If u want set mode EDITOR : 1 \nElse : 0 \n";
-		cin >> editor;*/
-
-		/*playerShips = compShips;*/
-		isWin = false;
-		isGameBegin = true;
-
-		system("cls");
-		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-		SetConsoleCursorPosition(handle, { 25, 0 });
-		SetConsoleTextAttribute(handle, 13);
-		cout << "Your Login :  " << record.name << endl;
-		SetConsoleTextAttribute(handle, 8 + 0);
-	}
+	void prepareGame(Record & record);
 
 	void update()
 	{
@@ -137,35 +107,7 @@ public:
 			isOver = true;
 	}
 
-	void menu()
-	{
-		bool menu = true;
-		do
-		{
-			action = getAction();
-			switch (action.mode)
-			{
-			case LEFT_BUTTON:
-				if (action.coord.X >= 0 && action.coord.X < 10 && action.coord.Y >= 0 && action.coord.Y < 3)
-				{
-
-					menu = false;
-				}
-				if (action.coord.X >= 11 && action.coord.X < 20 && action.coord.Y >= 0 && action.coord.Y < 3 && isGameBegin)
-				{
-					record.ships = playerShips;
-					HallOfFame(0, 5);
-				}
-				break;
-			case RIGHT_BUTTON:
-				break;
-			}
-		} while (menu);
-
-
-
-
-	}
+	void menu(Record &record);
 	void renderm()
 	{
 		system("cls");
@@ -201,28 +143,38 @@ public:
 
 		SetConsoleTextAttribute(handle, 7 + 0);
 	}
-	void HallOfFame(int x, int y)
-	{
-
-		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-		SetConsoleCursorPosition(handle, { x, y });
-		if (record.name)
-			cout << "Login : " << record.name << " - ships : " << record.ships << "    Enemy ships : "<< compShips << endl;
-		/*FILE * f;
-		fopen_s(&f, "record.txt", "r");
-		if (!f)
-		{
-		cout << "Wrong filename!\n";
-		return;
-		}
-
-		while (!feof(f))
-		putchar(fgetc(f));
-
-		fclose(f);*/
-
-	}
+	
 	void run(Game&game);
+};
+
+class Record : public Game
+{
+
+public:
+
+	struct RECORD{
+		char * name;
+		unsigned int ships;
+	};
+	RECORD record;
+	void setRecordName(char * a)
+	{
+		record.name = a;
+	}
+	void setRecordShips(int a)
+	{
+		record.ships = a;
+	}
+	char * getRecordName()
+	{
+		return record.name;
+	}
+	int getRecordShips()
+	{
+		return record.ships;
+	}
+
+	void hallOfFame(int x, int y);
 };
 
 class Player : public Game
@@ -773,7 +725,7 @@ Player :: Player()
 
 }
 
-void Mouse::processinput(Game&game,Player player, Player enemy)
+void Mouse::processinput(Game&game,Player player, Player enemy, Record & record)
 {
 	action = getAction();
 	switch (action.mode)
@@ -785,7 +737,7 @@ void Mouse::processinput(Game&game,Player player, Player enemy)
 		break;
 	case RIGHT_BUTTON:// records
 		game.renderm();
-		game.menu();
+		game.menu(record);
 		system("cls");
 		enemy.render();
 		player.renderp();
@@ -793,13 +745,95 @@ void Mouse::processinput(Game&game,Player player, Player enemy)
 	}
 }
 
+void Game::prepareGame(Record & record)
+{
+	system("cls");
+	system("mode con cols=100 lines=75");
+
+	isOver = false;
+	char * name = new char[51];
+
+	cout << "HEY!!! Welcome to the World of Warships \nEnter ur name pls : ";
+	cin.getline(name, 50);
+
+	record.setRecordName(name);
+
+	/*cout << "If u want set ships write : 0 \nIf u want set ships auto write : 1 \n";
+	bool auto_set = true;
+	cin >> auto_set;
+	cout << "If u want set mode EDITOR : 1 \nElse : 0 \n";
+	cin >> editor;*/
+
+	isWin = false;
+	isGameBegin = true;
+
+	system("cls");
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	SetConsoleCursorPosition(handle, { 25, 0 });
+	SetConsoleTextAttribute(handle, 13);
+	cout << "Your Login :  " << record.getRecordName() << endl;
+	SetConsoleTextAttribute(handle, 8 + 0);
+}
+void Record :: hallOfFame(int x, int y)
+{
+
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	SetConsoleCursorPosition(handle, { x, y });
+	if (record.name)
+		cout << "Login : " << record.name << " - ships : " << record.ships << "    Enemy ships : " << compShips << endl;
+	/*FILE * f;
+	fopen_s(&f, "record.txt", "r");
+	if (!f)
+	{
+	cout << "Wrong filename!\n";
+	return;
+	}
+
+	while (!feof(f))
+	putchar(fgetc(f));
+
+	fclose(f);*/
+
+}
+
+void Game::menu(Record &record)
+{
+	bool menu = true;
+	do
+	{
+		action = getAction();
+		switch (action.mode)
+		{
+		case LEFT_BUTTON:
+			if (action.coord.X >= 0 && action.coord.X < 10 && action.coord.Y >= 0 && action.coord.Y < 3)
+			{
+
+				menu = false;
+			}
+			if (action.coord.X >= 11 && action.coord.X < 20 && action.coord.Y >= 0 && action.coord.Y < 3 && isGameBegin)
+			{
+				record.setRecordShips(playerShips);
+				record.hallOfFame(0, 5);
+			}
+			break;
+		case RIGHT_BUTTON:
+			break;
+		}
+	} while (menu);
+
+
+
+
+}
+
 void Game::run(Game&game)
 {
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	srand(time(0));
 	renderm();
-	menu();
-	prepareGame();
+	Record record;
+	menu(record);
+	prepareGame(record);
 	Player player;
 	Player enemy;
 	Mouse mouse;
@@ -807,7 +841,7 @@ void Game::run(Game&game)
 	player.renderp();
 	while (!isOver)
 	{
-		mouse.processinput(game,player, enemy);
+		mouse.processinput(game,player, enemy,record);
 		update();
 		enemy.render();
 		player.renderp();
@@ -851,11 +885,15 @@ void Game::run(Game&game)
 }
 
 
+
+
 void main()
 {
 
 	Game game;
 	game.run(game);
 	system("pause");
+
+
 
 }
