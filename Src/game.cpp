@@ -10,6 +10,9 @@ class Game;
 class Player;
 class Mouse;
 class Record;
+class Menu;
+
+
 
 class Mouse
 {
@@ -49,10 +52,17 @@ public:
 			}
 		}
 	}
-	void processinput(Game&game, Player player, Player enemy, Record & record);
+	void processinput(Game&game, Player player, Player enemy, Record & record, Menu&menu);
 };
 
+class Menu : public Mouse
+{
+public:
 
+	void menu(Game&game, Record &record);
+	void renderm(Game&game);
+
+};
 class Game : public Mouse
 {
 private:
@@ -70,9 +80,19 @@ public:
 	unsigned int compShips = 20;
 	
 
-
-
-	bool isGameOver()
+	unsigned int getPlayerShips()
+	{
+		return playerShips;
+	}
+	unsigned int getCompShips()
+	{
+		return compShips;
+	}
+	bool getIsGameBegin()
+	{
+		return isGameBegin;
+	}
+	bool getIsOver()
 	{
 		return isOver;
 	}
@@ -107,42 +127,7 @@ public:
 			isOver = true;
 	}
 
-	void menu(Record &record);
-	void renderm()
-	{
-		system("cls");
-		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-		SetConsoleTextAttribute(handle, 7 * 16 + 9);
-		for (int y = 0; y < 3; y++)										// (0,0) - (10,3)
-		{
-			for (int x = 0; x < 10; x++)
-			{
-				SetConsoleCursorPosition(handle, { x, y });
-				if (y == 1 && x == 3)
-					cout << "PLAY";
-				else if (!(y == 1 && x >= 3 && x < 7))
-					cout << ' ';
-			}
-		}
 
-		if (isGameBegin)
-		{
-			SetConsoleTextAttribute(handle, 7 * 16 + 9);
-			for (int y = 0; y < 3; y++)										// (11,0) - (20,3)
-			{
-				for (int x = 11; x < 22; x++)
-				{
-					SetConsoleCursorPosition(handle, { x, y });
-					if (y == 1 && x == 12)
-						cout << "STATISTIC";
-					else if (!(y == 1 && x >= 12 && x < 21))
-						cout << ' ';
-				}
-			}
-		}
-
-		SetConsoleTextAttribute(handle, 7 + 0);
-	}
 	
 	void run(Game&game);
 };
@@ -154,27 +139,36 @@ public:
 
 	struct RECORD{
 		char * name;
-		unsigned int ships;
+		unsigned int pShips;
+		unsigned int cShips;
 	};
 	RECORD record;
-	void setRecordName(char * a)
+	void setName(char * a)
 	{
 		record.name = a;
 	}
-	void setRecordShips(int a)
+	void setPlayerShips(int a)
 	{
-		record.ships = a;
+		record.pShips = a;
 	}
-	char * getRecordName()
+	void setCompShips(int a)
+	{
+		record.cShips = a;
+	}
+	char * getName()
 	{
 		return record.name;
 	}
-	int getRecordShips()
+	int getPlayerShips()
 	{
-		return record.ships;
+		return record.pShips;
+	}
+	int getCompShips()
+	{
+		return record.cShips;
 	}
 
-	void hallOfFame(int x, int y);
+	void hallOfFame(const int x, const int y);
 };
 
 class Player : public Game
@@ -186,7 +180,7 @@ protected:
 public:
 	Player();
 	
-	void render()
+	void render(Game&game)
 	{
 		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 		SetConsoleCursorPosition(handle, { 0, 0 });
@@ -197,7 +191,7 @@ public:
 				switch (table_mode[y][x])
 				{
 				case CLOSE:
-					if (table_state[y][x] == SHIP_HERE && isGameOver())
+					if (table_state[y][x] == SHIP_HERE && game.getIsOver())
 					{
 						SetConsoleTextAttribute(handle, 7 * 16 + 9);
 						cout << (char)254;
@@ -526,38 +520,36 @@ public:
 
 	void AI(Game & game, Player & player)
 	{
-		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-
 		static int shoot_x, shoot_y;
 		static	short side = 0;
 		static int shoot_dy = 0, shoot_dx = 0;
 		static bool apple = false;
 		static unsigned int hit = 1;
 
+		//Simple AI
+		/*while (!PlayerTurn)
+		{
+			bool compTurn = true;
+			do
+			{
+				if (hit == 1)
+				{
+					shoot_dx = 0;
+					shoot_dy = 0;
+					shoot_x = rand() % getWidth();
+					shoot_y = rand() % getHeight();
+				}
+				shoot_dy += shoot_y;
+				shoot_dx += shoot_x;
+			} while (player.table_mode[shoot_dy][shoot_dx] != CLOSE);
+			if (shoot_dx >= 0 && shoot_dy >= 0 && shoot_dx < getWidth() && shoot_dy < getHeight())
+			{
+				player.openCell(game, shoot_dx, shoot_dy,true);
+				player.renderp();
+			}
+			game.update();
+		}*/
 
-		//while (!PlayerTurn)
-		//{
-		//	bool compTurn = true;
-		//	do
-		//	{
-		//		if (hit == 1)
-		//		{
-		//			shoot_dx = 0;
-		//			shoot_dy = 0;
-		//			shoot_x = rand() % getWidth();
-		//			shoot_y = rand() % getHeight();
-		//		}
-		//		shoot_dy += shoot_y;
-		//		shoot_dx += shoot_x;
-		//	} while (player.table_mode[shoot_dy][shoot_dx] != CLOSE);
-		//	if (shoot_dx >= 0 && shoot_dy >= 0 && shoot_dx < getWidth() && shoot_dy < getHeight())
-		//	{
-		//		/*hit++;*/
-		//		player.openCell(game, shoot_dx, shoot_dy,true);
-		//		player.renderp();
-		//	}
-		//	game.update();
-		//}
 		while (!PlayerTurn)
 		{
 			bool compTurn = true;
@@ -575,25 +567,22 @@ public:
 				{
 					do
 					{
-						do
+						shoot_dx = 0, shoot_dy = 0;
+						switch (side)
 						{
-							shoot_dx = 0, shoot_dy = 0;
-							switch (side)
-							{
-							case 0: shoot_dx = 0, shoot_dy = -1; break;
-							case 1: shoot_dx = 1, shoot_dy = 0; break;
-							case 2: shoot_dx = 0, shoot_dy = 1; break;
-							case 3: shoot_dx = -1, shoot_dy = 0; break;
-							}
-							if (shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight())
-							{
-								if (player.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] == OPEN)
-									side++;
-							}
-							else
+						case 0: shoot_dx = 0, shoot_dy = -1; break;
+						case 1: shoot_dx = 1, shoot_dy = 0; break;
+						case 2: shoot_dx = 0, shoot_dy = 1; break;
+						case 3: shoot_dx = -1, shoot_dy = 0; break;
+						}
+						if (shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight())
+						{
+							if (player.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] == OPEN)
 								side++;
-						} while (!(shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight()));
-					} while (player.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] != CLOSE);
+						}
+						else
+							side++;
+					} while (!(shoot_dx + shoot_x >= 0 && shoot_dy + shoot_y >= 0 && shoot_dx + shoot_x < getWidth() && shoot_dy + shoot_y < getHeight()) && (player.table_mode[shoot_dy + shoot_y][shoot_dx + shoot_x] != CLOSE));
 				}
 
 				shoot_dy += shoot_y;
@@ -619,55 +608,50 @@ public:
 					}
 					if (shoot_dy > 0)
 					{
-
+						apple = false;
 						if (shoot_dy + 1 + shoot_y < getHeight())// dy = 1
 						{
 							shoot_dy++;
-							apple = false;
 						}
-						else if (shoot_dy != 0)
+						else
 						{
 							shoot_dy = -1;
-							apple = false;
 						}
 					}
 					else if (shoot_dy < 0)
 					{
+						apple = false;
 						if (shoot_dy - 1 + shoot_y >= 0)// dy = -1
 						{
 							shoot_dy--;
-							apple = false;
 						}
-						else if (shoot_dy != 0)
+						else
 						{
 							shoot_dy = 1;
-							apple = false;
 						}
 					}
 					else if (shoot_dx > 0)
 					{
+						apple = false;
 						if (shoot_dx + 1 + shoot_x < getWidth())// dx = 1
 						{
 							shoot_dx++;
-							apple = false;
 						}
-						else if (shoot_dx != 0)
+						else
 						{
 							shoot_dx = -1;
-							apple = false;
 						}
 					}
 					else if (shoot_dx < 0)
 					{
+						apple = false;
 						if (shoot_dx - 1 + shoot_x >= 0)// dx = -1
 						{
 							shoot_dx--;
-							apple = false;
 						}
-						else if (shoot_dx != 0)
+						else
 						{
 							shoot_dx = 1;
-							apple = false;
 						}
 					}
 				}
@@ -715,6 +699,7 @@ public:
 	// _____________Artificial Intelligence____________
 };
 
+
 Player :: Player()
 {
 	create_array(table_mode, getHeight(), getWidth());// player field
@@ -725,7 +710,73 @@ Player :: Player()
 
 }
 
-void Mouse::processinput(Game&game,Player player, Player enemy, Record & record)
+void Menu::menu(Game&game, Record &record)
+{
+	bool menu = true;
+	do
+	{
+		action = getAction();
+		switch (action.mode)
+		{
+		case Game::LEFT_BUTTON:
+			if (action.coord.X >= 0 && action.coord.X < 10 && action.coord.Y >= 0 && action.coord.Y < 3)
+			{
+
+				menu = false;
+			}
+			if (action.coord.X >= 11 && action.coord.X < 20 && action.coord.Y >= 0 && action.coord.Y < 3 && game.getIsGameBegin())
+			{
+				record.setPlayerShips(game.getPlayerShips());
+				record.setCompShips(game.getCompShips());
+				record.hallOfFame(0, 5);
+			}
+			break;
+		case Game::RIGHT_BUTTON:
+			break;
+		}
+	} while (menu);
+
+
+
+
+}
+void Menu::renderm(Game&game)
+{
+	system("cls");
+	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	SetConsoleTextAttribute(handle, 7 * 16 + 9);
+	for (int y = 0; y < 3; y++)										// (0,0) - (10,3)
+	{
+		for (int x = 0; x < 10; x++)
+		{
+			SetConsoleCursorPosition(handle, { x, y });
+			if (y == 1 && x == 3)
+				cout << "PLAY";
+			else if (!(y == 1 && x >= 3 && x < 7))
+				cout << ' ';
+		}
+	}
+
+	if (game.getIsGameBegin())
+	{
+		SetConsoleTextAttribute(handle, 7 * 16 + 9);
+		for (int y = 0; y < 3; y++)										// (11,0) - (20,3)
+		{
+			for (int x = 11; x < 22; x++)
+			{
+				SetConsoleCursorPosition(handle, { x, y });
+				if (y == 1 && x == 12)
+					cout << "STATISTIC";
+				else if (!(y == 1 && x >= 12 && x < 21))
+					cout << ' ';
+			}
+		}
+	}
+
+	SetConsoleTextAttribute(handle, 7 + 0);
+}
+
+void Mouse::processinput(Game&game,Player player, Player enemy, Record & record,Menu&menu)
 {
 	action = getAction();
 	switch (action.mode)
@@ -736,10 +787,10 @@ void Mouse::processinput(Game&game,Player player, Player enemy, Record & record)
 			enemy.openCell(game,action.coord.X, action.coord.Y); // Fasle - it's not computer turn
 		break;
 	case RIGHT_BUTTON:// records
-		game.renderm();
-		game.menu(record);
+		menu.renderm(game);
+		menu.menu(game,record);
 		system("cls");
-		enemy.render();
+		enemy.render(game);
 		player.renderp();
 		break;
 	}
@@ -756,7 +807,7 @@ void Game::prepareGame(Record & record)
 	cout << "HEY!!! Welcome to the World of Warships \nEnter ur name pls : ";
 	cin.getline(name, 50);
 
-	record.setRecordName(name);
+	record.setName(name);
 
 	/*cout << "If u want set ships write : 0 \nIf u want set ships auto write : 1 \n";
 	bool auto_set = true;
@@ -771,16 +822,16 @@ void Game::prepareGame(Record & record)
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleCursorPosition(handle, { 25, 0 });
 	SetConsoleTextAttribute(handle, 13);
-	cout << "Your Login :  " << record.getRecordName() << endl;
+	cout << "Your Login :  " << record.getName() << endl;
 	SetConsoleTextAttribute(handle, 8 + 0);
 }
-void Record :: hallOfFame(int x, int y)
+void Record :: hallOfFame(const int x,const int y)
 {
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleCursorPosition(handle, { x, y });
 	if (record.name)
-		cout << "Login : " << record.name << " - ships : " << record.ships << "    Enemy ships : " << compShips << endl;
+		cout << "Login : " << record.name << " - ships : " << record.pShips << "    Enemy ships : " << record.cShips << endl;
 	/*FILE * f;
 	fopen_s(&f, "record.txt", "r");
 	if (!f)
@@ -796,65 +847,38 @@ void Record :: hallOfFame(int x, int y)
 
 }
 
-void Game::menu(Record &record)
-{
-	bool menu = true;
-	do
-	{
-		action = getAction();
-		switch (action.mode)
-		{
-		case LEFT_BUTTON:
-			if (action.coord.X >= 0 && action.coord.X < 10 && action.coord.Y >= 0 && action.coord.Y < 3)
-			{
 
-				menu = false;
-			}
-			if (action.coord.X >= 11 && action.coord.X < 20 && action.coord.Y >= 0 && action.coord.Y < 3 && isGameBegin)
-			{
-				record.setRecordShips(playerShips);
-				record.hallOfFame(0, 5);
-			}
-			break;
-		case RIGHT_BUTTON:
-			break;
-		}
-	} while (menu);
-
-
-
-
-}
 
 void Game::run(Game&game)
 {
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	srand(time(0));
-	renderm();
+	Menu menu;
+	menu.renderm(game);
 	Record record;
-	menu(record);
+	menu.menu(game,record);
 	prepareGame(record);
 	Player player;
 	Player enemy;
 	Mouse mouse;
-	enemy.render();
+	enemy.render(game);
 	player.renderp();
 	while (!isOver)
 	{
-		mouse.processinput(game,player, enemy,record);
+		mouse.processinput(game, player, enemy, record, menu);
 		update();
-		enemy.render();
+		enemy.render(game);
 		player.renderp();
 		enemy.AI(game,player);
 		update();
-		enemy.render();
+		enemy.render(game);
 		player.renderp();
 		
 		SetConsoleTextAttribute(handle, 13);
 		SetConsoleCursorPosition(handle, { 22, 11 });
 		cout << compShips;
 	}
-	enemy.render();
+	enemy.render(game);
 	if (isWin)
 	{
 		/*record.ships = game.playerShips;
