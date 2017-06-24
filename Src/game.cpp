@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS 
 #include"game.h"
 #include"dynamic_array.h"
 #include<iostream>
@@ -6,6 +7,7 @@
 using namespace std;
 namespace warships
 {
+	
 	Map::Map()
 	{
 		create_array(table_mode, getHeight(), getWidth());// player field
@@ -350,26 +352,55 @@ namespace warships
 		}
 	}
 
-	void Record::hallOfFame(const int x, const int y)
+	void Record::setRecord(Game&game)
 	{
+		record.pShips = game.playerShips;
+		FILE * f;
+		fopen_s(&f, "record.txt", "a");
 
+		char ships[4];
+		_itoa(record.pShips, ships, 10);
+		char * rec = new char[50];
+		rec = record.name;
+
+		strcat(rec, "-");
+		strcat(rec, ships);
+		strcat(rec, "\n");
+		fputs(rec, f);
+		fclose(f);
+	}
+	void Record::hallOfFame(const int x, const int y, Game&game)
+	{
+		
+		setPlayerShips(game.getPlayerShips());
+		setCompShips(game.getCompShips());
 		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 		SetConsoleCursorPosition(handle, { x, y });
 		if (record.name)
-			cout << "Login : " << record.name << " - ships : " << record.pShips << "    Enemy ships : " << record.cShips << endl;
-		/*FILE * f;
+			cout << "Login : " << record.name << " - ships : " << record.pShips << "    Enemy ships : " << record.cShips << endl << endl;
+		if (game.getIsOver())
+		{
+			showRecords(game);
+		}
+	}
+	void Record::showRecords(Game&game)
+	{
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		SetConsoleTextAttribute(handle, 10);
+		cout << "Last records :\n";
+		setRecord(game);
+		FILE * f;
 		fopen_s(&f, "record.txt", "r");
 		if (!f)
 		{
-		cout << "Wrong filename!\n";
-		return;
+			cout << "Wrong filename!\n";
+			return;
 		}
 
 		while (!feof(f))
-		putchar(fgetc(f));
+			putchar(fgetc(f));
 
-		fclose(f);*/
-
+		fclose(f);
 	}
 
 	void Menu::menu(Game&game, Record &record)
@@ -388,9 +419,7 @@ namespace warships
 				}
 				if (action.coord.X >= 11 && action.coord.X < 20 && action.coord.Y >= 0 && action.coord.Y < 3 && game.getIsGameBegin())
 				{
-					record.setPlayerShips(game.getPlayerShips());
-					record.setCompShips(game.getCompShips());
-					record.hallOfFame(0, 5);
+					record.hallOfFame(0, 5,game);
 				}
 				break;
 			case Game::RIGHT_BUTTON:
@@ -454,12 +483,12 @@ namespace warships
 	}
 	void Game::prepareGame(Record & record)
 	{
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 		system("cls");
 		system("mode con cols=100 lines=75");
 
 		isOver = false;
 		char * name = new char[51];
-
 		cout << "HEY!!! Welcome to the World of Warships \nEnter ur name pls : ";
 		cin.getline(name, 50);
 
@@ -475,7 +504,6 @@ namespace warships
 		isGameBegin = true;
 
 		system("cls");
-		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 		SetConsoleCursorPosition(handle, { 25, 0 });
 		SetConsoleTextAttribute(handle, 13);
 		cout << "Your Login :  " << record.getName() << endl;
@@ -504,7 +532,7 @@ namespace warships
 			update();
 			compMap.render(game);
 			playerMap.renderp();
-			computer.hardAi(game, playerMap, player);
+			computer.simpleAi(game, playerMap, player);
 			update();
 			compMap.render(game);
 			playerMap.renderp();
@@ -516,11 +544,10 @@ namespace warships
 		compMap.render(game);
 		if (isWin)
 		{
-
 			SetConsoleTextAttribute(handle, 13);
 			SetConsoleCursorPosition(handle, { 22, 11 });
 			cout << "WIN!!\n";
-
+			record.hallOfFame(0,13,game);
 		}
 		else
 		{
