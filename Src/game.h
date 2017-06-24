@@ -159,7 +159,9 @@ namespace warships{
 			return record.cShips;
 		}
 
-		void hallOfFame(const int x, const int y);
+		void hallOfFame(const int x, const int y, Game&game);
+		void setRecord(Game&game);
+		void showRecords(Game&game);
 
 		/*record.ships = game.playerShips;
 		FILE * f;
